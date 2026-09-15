@@ -1,0 +1,38 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: '17 3 */4 * *'
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_KEY:-}" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY GitHub secret."
+            exit 1
+          fi
+
+          URL="${SUPABASE_URL%/}/rest/v1/tipi_servizio?select=id&limit=1"
+
+          echo "Calling Supabase REST API..."
+
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 5 \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Accept: application/json" \
+            "$URL"
+
+          echo
+          echo "Supabase keepalive request completed successfully."
