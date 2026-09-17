@@ -100,6 +100,6 @@ function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&l
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient();msg('Accesso…','info','authMsg');const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)msg(error.message,'error','authMsg');else msg('','info','authMsg')});
 $('showRegister').onclick=async()=>{initClient();const email=prompt('Email del socio');if(!email)return;const password=prompt('Password (almeno 8 caratteri)');if(!password)return;const nome=prompt('Nome');const cognome=prompt('Cognome');const {error}=await sb.auth.signUp({email,password,options:{data:{nome,cognome}}});msg(error?error.message:'Registrazione completata. Se richiesto, confermare l’email prima di accedere.',''+(error?'error':'success'),'authMsg')};
 $('logout').onclick=()=>sb.auth.signOut();
-$('serviceForm').addEventListener('submit',saveService);$('editServiceForm').addEventListener('submit',saveEditedService);$('sDate').value=todayISO();boot();
+$('serviceForm').addEventListener('submit',saveService);$('editServiceForm').addEventListener('submit',saveEditedService);$('memberForm').addEventListener('submit',saveMember);$('sDate').value=todayISO();boot();
 </script>
 </body></html>
