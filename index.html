@@ -14,12 +14,14 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}label{font-size:13px;font-weight:bold}input,select,textarea{width:100%;margin-top:5px;padding:10px;border:1px solid #ccc;border-radius:7px}textarea{min-height:80px}.full{grid-column:1/-1}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.auth{min-height:100vh;display:grid;place-items:center;padding:20px}.authbox{width:min(460px,100%);background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 30px #0002}.authbox h2{margin-top:0;color:#17365d}.authbox form{display:block}.authbox label{display:block;margin-bottom:12px}.small{font-size:11px}.right{text-align:right}
 .modal{position:fixed;inset:0;background:#0006;display:grid;place-items:center;z-index:30;padding:20px}.modalbox{background:#fff;border-radius:14px;padding:20px;width:min(600px,100%);max-height:90vh;overflow:auto}
 @media(max-width:700px){header h1{font-size:15px}.userbox{font-size:11px}.week{grid-template-columns:repeat(7,140px)}table{font-size:12px}}
+.anc-official-logo{display:block;width:min(300px,72vw);height:auto;margin:0 auto 16px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.16))}@media(max-width:600px){.anc-official-logo{width:min(240px,70vw);margin-bottom:12px}}
 </style>
 </head>
 <body>
 <div id="authView" class="auth">
  <div class="authbox">
-  <h2>131° Gruppo di Volontariato O.D.V. ANC di Mira</h2>
+  <img src="logo-anc-mira.png" class="anc-official-logo" alt="131° Gruppo di Volontariato O.D.V. ANC di Mira">
+<h2>131° Gruppo di Volontariato O.D.V. ANC di Mira</h2>
   <p class="muted">Accesso riservato ai soci e responsabili. I dati vengono sincronizzati online con Supabase.</p>
   <div id="authMsg"></div>
   <form id="loginForm">
