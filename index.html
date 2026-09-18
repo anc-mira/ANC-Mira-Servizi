@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="131° Gruppo di Volontariato O.D.V. ANC di Mira">
-<title>131° GRUPPO DI VOLONTARIATO O.D.V. ANC DI MIRA</title>
+<meta name="theme-color" content="#17365d"><meta name="description" content="131° Gruppo di Volontariato O.D.V. ANC di Mira">
+<link rel="manifest" href="manifest.json"><title>131° GRUPPO DI VOLONTARIATO O.D.V. ANC DI MIRA</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f5f8;color:#20242a}header{background:#17365d;color:#fff;padding:15px 20px;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;gap:12px;align-items:center}header h1{font-size:18px;margin:0;line-height:1.25}header p{margin:4px 0 0;font-size:12px;opacity:.85}.userbox{font-size:12px;text-align:right}.userbox button{margin-top:5px;padding:7px 10px}
@@ -15,12 +15,6 @@ form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1
 .modal{position:fixed;inset:0;background:#0006;display:grid;place-items:center;z-index:30;padding:20px}.modalbox{background:#fff;border-radius:14px;padding:20px;width:min(600px,100%);max-height:90vh;overflow:auto}
 @media(max-width:700px){header h1{font-size:15px}.userbox{font-size:11px}.week{grid-template-columns:repeat(7,140px)}table{font-size:12px}}
 </style>
-<link rel="manifest" href="./manifest.webmanifest">
-<meta name="theme-color" content="#17365d">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="ANC Mira Servizi">
-<link rel="apple-touch-icon" href="./icon-192.png">
 </head>
 <body>
 <div id="authView" class="auth">
@@ -121,25 +115,7 @@ async function monthlyPdfReport(){
  <h2>Riepilogo per socio</h2>${people?`<table><tr><th>Socio</th><th>Presenze</th><th>Ore</th><th>Assenze</th><th>Giustificati</th></tr>${people}</table>`:'<p>Nessuna presenza registrata nei servizi completati del mese.</p>'}
  <h2>Dettaglio servizi completati</h2>${detail?`<table><tr><th>Data</th><th>Ora</th><th>Servizio</th><th>Luogo</th><th>Presenti</th><th>Assenti</th><th>Giustificati</th></tr>${detail}</table>`:'<p>Nessun servizio completato nel mese selezionato.</p>'}
  <div class="foot">Documento generato dal gestionale ANC Mira. Sono inclusi esclusivamente i servizi con stato “completato”.</div>
- 
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    try {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const reg of regs) {
-        if (!reg.active || !reg.active.scriptURL.endsWith('/service-worker.js')) {
-          await reg.unregister();
-        }
-      }
-      await navigator.serviceWorker.register('./service-worker.js', { scope: './' });
-    } catch (e) {
-      console.error('PWA service worker:', e);
-    }
-  });
-}
-</script>
-</body></html>`);
+ </body></html>`);
  w.document.close(); w.focus();
 }
 async function loadYear(){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return;const y=Number($('yearPicker').value)||new Date().getFullYear();$('yearPicker').value=y;const from=`${y}-01-01`,to=`${y}-12-31`;const {data,error}=await sb.from('servizi').select('id,data,assegnazioni_servizio(stato),presenze(stato,ore_totali)').gte('data',from).lte('data',to).order('data');if(error){$('yearTable').innerHTML=`<div class="error">${esc(error.message)}</div>`;return}const rows=data||[];const months=Array.from({length:12},(_,i)=>({n:i+1,servizi:0,disp:0,nondisp:0,presenti:0,ore:0}));rows.forEach(s=>{const z=months[Number(s.data.slice(5,7))-1];z.servizi++;(s.assegnazioni_servizio||[]).forEach(a=>{if(a.stato==='confermato')z.disp++;if(a.stato==='non_disponibile')z.nondisp++});(s.presenze||[]).forEach(p=>{if(p.stato==='presente'){z.presenti++;z.ore+=Number(p.ore_totali||0)}})});const totalHours=months.reduce((n,x)=>n+x.ore,0);$('yearSummary').innerHTML=`<div class="card">Servizi anno<div class="num">${rows.length}</div></div><div class="card">Ore registrate<div class="num">${totalHours.toFixed(2)}</div></div>`;const names=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];$('yearTable').innerHTML='<table><tr><th>Mese</th><th>Servizi</th><th>Disponibilità</th><th>Non disponibili</th><th>Presenze</th><th>Ore</th></tr>'+months.map((z,i)=>`<tr style="cursor:pointer" onclick="openMonthFromYear(${y},${z.n})"><td><b>${names[i]}</b></td><td>${z.servizi}</td><td>${z.disp}</td><td>${z.nondisp}</td><td>${z.presenti}</td><td>${z.ore.toFixed(2)}</td></tr>`).join('')+'</table>'}
