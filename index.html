@@ -115,7 +115,15 @@ async function monthlyPdfReport(){
  <h2>Riepilogo per socio</h2>${people?`<table><tr><th>Socio</th><th>Presenze</th><th>Ore</th><th>Assenze</th><th>Giustificati</th></tr>${people}</table>`:'<p>Nessuna presenza registrata nei servizi completati del mese.</p>'}
  <h2>Dettaglio servizi completati</h2>${detail?`<table><tr><th>Data</th><th>Ora</th><th>Servizio</th><th>Luogo</th><th>Presenti</th><th>Assenti</th><th>Giustificati</th></tr>${detail}</table>`:'<p>Nessun servizio completato nel mese selezionato.</p>'}
  <div class="foot">Documento generato dal gestionale ANC Mira. Sono inclusi esclusivamente i servizi con stato “completato”.</div>
- </body></html>`);
+ 
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(console.error);
+  });
+}
+</script>
+</body></html>`);
  w.document.close(); w.focus();
 }
 async function loadYear(){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return;const y=Number($('yearPicker').value)||new Date().getFullYear();$('yearPicker').value=y;const from=`${y}-01-01`,to=`${y}-12-31`;const {data,error}=await sb.from('servizi').select('id,data,assegnazioni_servizio(stato),presenze(stato,ore_totali)').gte('data',from).lte('data',to).order('data');if(error){$('yearTable').innerHTML=`<div class="error">${esc(error.message)}</div>`;return}const rows=data||[];const months=Array.from({length:12},(_,i)=>({n:i+1,servizi:0,disp:0,nondisp:0,presenti:0,ore:0}));rows.forEach(s=>{const z=months[Number(s.data.slice(5,7))-1];z.servizi++;(s.assegnazioni_servizio||[]).forEach(a=>{if(a.stato==='confermato')z.disp++;if(a.stato==='non_disponibile')z.nondisp++});(s.presenze||[]).forEach(p=>{if(p.stato==='presente'){z.presenti++;z.ore+=Number(p.ore_totali||0)}})});const totalHours=months.reduce((n,x)=>n+x.ore,0);$('yearSummary').innerHTML=`<div class="card">Servizi anno<div class="num">${rows.length}</div></div><div class="card">Ore registrate<div class="num">${totalHours.toFixed(2)}</div></div>`;const names=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];$('yearTable').innerHTML='<table><tr><th>Mese</th><th>Servizi</th><th>Disponibilità</th><th>Non disponibili</th><th>Presenze</th><th>Ore</th></tr>'+months.map((z,i)=>`<tr style="cursor:pointer" onclick="openMonthFromYear(${y},${z.n})"><td><b>${names[i]}</b></td><td>${z.servizi}</td><td>${z.disp}</td><td>${z.nondisp}</td><td>${z.presenti}</td><td>${z.ore.toFixed(2)}</td></tr>`).join('')+'</table>'}
