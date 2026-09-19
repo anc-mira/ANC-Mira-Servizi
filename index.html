@@ -49,7 +49,23 @@ form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1
 <section id="members" class="hidden"><div class="panel"><h2>Soci</h2><div class="actions"><button id="addMemberBtn" onclick="openNewMember()">➕ AGGIUNGI SOCIO</button><button onclick="loadMembers()">↻ Aggiorna</button></div><div id="membersTable">Caricamento…</div></div></section>
 <section id="myservices" class="hidden"><div class="panel"><h2>I miei servizi</h2><p class="muted">Per ogni servizio comunica preventivamente la tua disponibilità: Disponibile o Non disponibile.</p><div id="myServicesTable">Caricamento…</div></div></section>
 <section id="attendance" class="hidden"><div class="panel"><h2>Presenze e ore</h2><div id="attendanceTable">Caricamento…</div></div></section>
-<section id="notifications" class="hidden"><div class="panel"><h2>Notifiche</h2><div id="notificationsList">Caricamento…</div></div></section>
+<section id="notifications" class="hidden"><div class="panel"><h2>Notifiche</h2><div class="info">
+  <b>Notifiche push sul dispositivo</b><br>
+  <span class="small">
+    Attivale su ogni telefono o computer sul quale desideri ricevere gli avvisi dei nuovi servizi.
+  </span>
+
+  <div class="actions">
+    <button
+      id="enablePushBtn"
+      type="button"
+      onclick="enablePushNotifications()">
+      🔔 ATTIVA NOTIFICHE
+    </button>
+  </div>
+
+  <div id="pushStatus" class="small muted"></div>
+</div><div id="notificationsList">Caricamento…</div></div></section>
 </main></div>
 
 <script>
@@ -194,5 +210,114 @@ $('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient
 $('showRegister').onclick=async()=>{initClient();const email=prompt('Email del socio');if(!email)return;const password=prompt('Password (almeno 8 caratteri)');if(!password)return;const nome=prompt('Nome');const cognome=prompt('Cognome');const {error}=await sb.auth.signUp({email,password,options:{data:{nome,cognome}}});msg(error?error.message:'Registrazione completata. Se richiesto, confermare l’email prima di accedere.',''+(error?'error':'success'),'authMsg')};
 $('logout').onclick=()=>sb.auth.signOut();
 $('serviceForm').addEventListener('submit',saveService);$('editServiceForm').addEventListener('submit',saveEditedService);$('memberForm').addEventListener('submit',saveMember);$('sDate').value=todayISO();$('monthPicker').value=todayISO().slice(0,7);$('yearPicker').value=new Date().getFullYear();boot();
+const VAPID_PUBLIC_KEY = 'BOIFV1fE7qCCFLjWQi-KXepX89FRopFd_EGsCsMzTlgEw3E6STDLn7hrasb6lhaWvWKgZmUnis5PTK2BYtTwxms';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = atob(base64);
+
+  return Uint8Array.from(
+    [...rawData].map(char => char.charCodeAt(0))
+  );
+}
+
+async function enablePushNotifications() {
+
+  if (!currentUser) {
+    return msg('Accedi prima di attivare le notifiche.', 'error');
+  }
+
+  if (
+    !('serviceWorker' in navigator) ||
+    !('PushManager' in window) ||
+    !('Notification' in window)
+  ) {
+    return msg(
+      'Le notifiche push non sono supportate su questo dispositivo/browser.',
+      'error'
+    );
+  }
+
+  try {
+
+    const permission = await Notification.requestPermission();
+
+    if (permission !== 'granted') {
+      return msg('Permesso notifiche non concesso.', 'error');
+    }
+
+    const registration =
+      await navigator.serviceWorker.register('./sw.js');
+
+    await navigator.serviceWorker.ready;
+
+    let subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+
+      subscription =
+        await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey:
+            urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+    }
+
+    const json = subscription.toJSON();
+
+    const { error } = await sb
+      .from('push_subscriptions')
+      .upsert(
+        {
+          user_id: currentUser.id,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth,
+          updated_at: new Date().toISOString()
+        },
+        {
+          onConflict: 'endpoint'
+        }
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    const status = document.getElementById('pushStatus');
+
+    if (status) {
+      status.innerHTML =
+        '✅ Notifiche push attive su questo dispositivo.';
+    }
+
+    msg(
+      '🔔 Notifiche push attivate correttamente.',
+      'success'
+    );
+
+  } catch (error) {
+
+    console.error(error);
+
+    msg(
+      'Errore attivazione notifiche: ' +
+      (error.message || error),
+      'error'
+    );
+  }
+}
+...
+async function enablePushNotifications() {
+   ...
+}
+
 </script>
-</body></html>
+</body>
+</html>
+
