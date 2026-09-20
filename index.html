@@ -224,8 +224,78 @@ function urlBase64ToUint8Array(base64String) {
     [...rawData].map(c => c.charCodeAt(0))
   );
 }
- 
- $('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient();msg('Accesso…','info','authMsg');const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)msg(error.message,'error','authMsg');else msg('','info','authMsg')});
+async function enablePushNotifications() {
+  const status = $('pushStatus');
+
+  try {
+    if (!currentUser) {
+      status.textContent = '❌ Devi prima effettuare l’accesso.';
+      return;
+    }
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      status.textContent = '❌ Questo dispositivo non supporta le notifiche push.';
+      return;
+    }
+
+    status.textContent = 'Richiesta autorizzazione notifiche...';
+
+    const permission = await Notification.requestPermission();
+
+    if (permission !== 'granted') {
+      status.textContent = '❌ Autorizzazione notifiche non concessa.';
+      return;
+    }
+
+    status.textContent = 'Registrazione dispositivo...';
+
+    const registration =
+      await navigator.serviceWorker.register('./sw.js');
+
+    await navigator.serviceWorker.ready;
+
+    let subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      subscription =
+        await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey:
+            urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+    }
+
+    const json = subscription.toJSON();
+
+    const { error } = await sb
+      .from('push_subscriptions')
+      .upsert(
+        {
+          user_id: currentUser.id,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth,
+          updated_at: new Date().toISOString()
+        },
+        {
+          onConflict: 'endpoint'
+        }
+      );
+
+    if (error) throw error;
+
+    status.textContent =
+      '✅ Notifiche attivate correttamente su questo dispositivo.';
+
+  } catch (e) {
+    console.error('Errore attivazione push:', e);
+
+    status.textContent =
+      '❌ Errore: ' + (e.message || e);
+  }
+}
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient();msg('Accesso…','info','authMsg');const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)msg(error.message,'error','authMsg');else msg('','info','authMsg')});
 $('showRegister').onclick=async()=>{initClient();const email=prompt('Email del socio');if(!email)return;const password=prompt('Password (almeno 8 caratteri)');if(!password)return;const nome=prompt('Nome');const cognome=prompt('Cognome');const {error}=await sb.auth.signUp({email,password,options:{data:{nome,cognome}}});msg(error?error.message:'Registrazione completata. Se richiesto, confermare l’email prima di accedere.',''+(error?'error':'success'),'authMsg')};
 $('logout').onclick=()=>sb.auth.signOut();
 $('serviceForm').addEventListener('submit',saveService);$('editServiceForm').addEventListener('submit',saveEditedService);$('memberForm').addEventListener('submit',saveMember);$('sDate').value=todayISO();$('monthPicker').value=todayISO().slice(0,7);$('yearPicker').value=new Date().getFullYear();boot();
