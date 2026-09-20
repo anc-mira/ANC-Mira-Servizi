@@ -212,7 +212,74 @@ async function saveAssignments(){if(!assignServiceId)return;const id=assignServi
 async function getService(id){const {data,error}=await sb.from('servizi').select('*,assegnazioni_servizio(id,socio_id,stato)').eq('id',id).single();if(error){msg(error.message,'error');return null}return data}
 function closeEdit(){$('editModal').classList.add('hidden')}
 async function openEdit(id){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');const s=await getService(id);if(!s)return;if(s.stato==='completato')return msg('Servizio confermato: usa “Riapri servizio” prima di modificarlo.','error');$('eId').value=s.id;$('eTitle').value=s.titolo||'';$('eDate').value=s.data||'';$('eStart').value=fmtTime(s.ora_inizio);$('eEnd').value=fmtTime(s.ora_fine);$('eRequired').value=s.soci_richiesti||1;$('ePlace').value=s.luogo||'';$('eNotes').value=s.descrizione||'';const [t,m]=await Promise.all([sb.from('tipi_servizio').select('*').eq('attivo',true).order('nome'),sb.from('soci').select('*').eq('attivo',true).order('cognome').order('nome')]);if(t.error||m.error)return msg((t.error||m.error).message,'error');$('eType').innerHTML=(t.data||[]).map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('');$('eManager').innerHTML='<option value="">Nessuno</option>'+(m.data||[]).map(x=>`<option value="${x.id}">${esc(fullName(x))}</option>`).join('');$('eMembers').innerHTML=(m.data||[]).map(x=>`<option value="${x.id}">${esc(fullName(x))}</option>`).join('');$('eType').value=s.tipo_servizio_id||'';$('eManager').value=s.responsabile_id||'';const assigned=new Set((s.assegnazioni_servizio||[]).map(x=>x.socio_id));[...$('eMembers').options].forEach(o=>o.selected=assigned.has(o.value));$('editModal').classList.remove('hidden')}
-async function saveEditedService(e){e.preventDefault();if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');const id=$('eId').value;const check=await sb.from('servizi').select('stato').eq('id',id).single();if(check.error)return msg(check.error.message,'error');if(check.data?.stato==='completato')return msg('Servizio confermato: riaprilo prima di modificarlo.','error');const payload={titolo:$('eTitle').value,data:$('eDate').value,ora_inizio:$('eStart').value,ora_fine:$('eEnd').value,tipo_servizio_id:$('eType').value||null,responsabile_id:$('eManager').value||null,soci_richiesti:Number($('eRequired').value),luogo:$('ePlace').value,descrizione:$('eNotes').value};const {error}=await sb.from('servizi').update(payload).eq('id',id);if(error)return msg(error.message,'error');const selected=[...$('eMembers').selectedOptions].map(o=>o.value);const old=await sb.from('assegnazioni_servizio').select('id,socio_id').eq('servizio_id',id);if(old.error)return msg(old.error.message,'error');const selectedSet=new Set(selected);const oldRows=old.data||[];const remove=oldRows.filter(x=>!selectedSet.has(x.socio_id)).map(x=>x.id);if(remove.length){const r=await sb.from('assegnazioni_servizio').delete().in('id',remove);if(r.error)return msg(r.error.message,'error')}const oldSet=new Set(oldRows.map(x=>x.socio_id));const add=selected.filter(x=>!oldSet.has(x)).map(socio_id=>({servizio_id:id,socio_id,stato:'in_attesa'}));if(add.length){const r=await sb.from('assegnazioni_servizio').insert(add);if(r.error)return msg(r.error.message,'error')}closeEdit();msg('Servizio modificato e sincronizzato online.','success');await loadWeek();await loadDashboard()}
+async function saveEditedService(e){
+  e.preventDefault();
+  if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');
+
+  const id=$('eId').value;
+  const check=await sb.from('servizi').select('stato').eq('id',id).single();
+  if(check.error)return msg(check.error.message,'error');
+  if(check.data?.stato==='completato')return msg('Servizio confermato: riaprilo prima di modificarlo.','error');
+
+  const payload={
+    titolo:$('eTitle').value,
+    data:$('eDate').value,
+    ora_inizio:$('eStart').value,
+    ora_fine:$('eEnd').value,
+    tipo_servizio_id:$('eType').value||null,
+    responsabile_id:$('eManager').value||null,
+    soci_richiesti:Number($('eRequired').value),
+    luogo:$('ePlace').value,
+    descrizione:$('eNotes').value
+  };
+
+  const {error}=await sb.from('servizi').update(payload).eq('id',id);
+  if(error)return msg(error.message,'error');
+
+  const selected=[...$('eMembers').selectedOptions].map(o=>o.value);
+  const old=await sb.from('assegnazioni_servizio').select('id,socio_id').eq('servizio_id',id);
+  if(old.error)return msg(old.error.message,'error');
+
+  const selectedSet=new Set(selected);
+  const oldRows=old.data||[];
+  const remove=oldRows.filter(x=>!selectedSet.has(x.socio_id)).map(x=>x.id);
+
+  if(remove.length){
+    const r=await sb.from('assegnazioni_servizio').delete().in('id',remove);
+    if(r.error)return msg(r.error.message,'error');
+  }
+
+  const oldSet=new Set(oldRows.map(x=>x.socio_id));
+  const add=selected.filter(x=>!oldSet.has(x)).map(socio_id=>({servizio_id:id,socio_id,stato:'in_attesa'}));
+
+  if(add.length){
+    const r=await sb.from('assegnazioni_servizio').insert(add);
+    if(r.error)return msg(r.error.message,'error');
+  }
+
+  // Invia la notifica push solo dopo il salvataggio completo del servizio.
+  try {
+    const {data:pushData,error:pushError}=await sb.functions.invoke('send-new-service-push',{
+      body:{
+        servizio_id:id,
+        tipo:'modificato'
+      }
+    });
+
+    if(pushError){
+      console.error('Errore push servizio modificato:',pushError);
+    }else{
+      console.log('Push servizio modificato:',pushData);
+    }
+  }catch(pushError){
+    console.error('Errore invio push servizio modificato:',pushError);
+  }
+
+  closeEdit();
+  msg('Servizio modificato e sincronizzato online.','success');
+  await loadWeek();
+  await loadDashboard();
+}
 
 async function completeService(id){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');const s=await getService(id);if(!s)return;if(s.stato==='completato')return msg('Il servizio è già confermato.','info');if(!confirm(`Confermare definitivamente il servizio "${s.titolo}" del ${fmtDate(s.data)}?\n\nPrima controlla Presente / Assente / Giustificato in Gestisci soci. Dopo la conferma i soci non potranno più modificare la disponibilità.`))return;const {error}=await sb.from('servizi').update({stato:'completato'}).eq('id',id);if(error)return msg('Errore conferma servizio: '+error.message,'error');msg('Servizio confermato e chiuso.','success');await loadWeek();await loadDashboard();await loadMonth();await loadYear();await loadAttendance()}
 async function reopenService(id){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');const s=await getService(id);if(!s)return;if(!confirm(`Riaprire il servizio "${s.titolo}" del ${fmtDate(s.data)}?\n\nI soci potranno nuovamente modificare la disponibilità.`))return;const {error}=await sb.from('servizi').update({stato:'programmato'}).eq('id',id);if(error)return msg('Errore riapertura servizio: '+error.message,'error');msg('Servizio riaperto.','success');await loadWeek();await loadDashboard();await loadMonth();await loadYear()}
@@ -317,4 +384,3 @@ $('serviceForm').addEventListener('submit',saveService);$('editServiceForm').add
 </script>
 </body>
 </html>
-
