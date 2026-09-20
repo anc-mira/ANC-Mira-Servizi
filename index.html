@@ -206,7 +206,26 @@ async function confirmDelete(id){if(!['admin','responsabile'].includes(currentPr
 async function deleteFromEdit(){const id=$('eId').value;closeEdit();await confirmDelete(id)}
 function subscribe(){if(realtime||!sb)return;realtime=sb.channel('anc-mira-live').on('postgres_changes',{event:'*',schema:'public',table:'servizi'},()=>loadDashboard().then(loadWeek)).on('postgres_changes',{event:'*',schema:'public',table:'assegnazioni_servizio'},()=>loadDashboard().then(loadWeek)).on('postgres_changes',{event:'*',schema:'public',table:'presenze'},()=>{if(['admin','responsabile'].includes(currentProfile?.ruolo))loadAttendance().then(loadDashboard);else loadMyServices()}).on('postgres_changes',{event:'*',schema:'public',table:'notifiche',filter:`utente_id=eq.${currentUser.id}`},()=>loadNotifications()).subscribe()}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient();msg('Accesso…','info','authMsg');const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)msg(error.message,'error','authMsg');else msg('','info','authMsg')});
+const VAPID_PUBLIC_KEY =
+  'BOIFV1fE7qCCFLjWQi-KXepX89FRopFd_EGsCsMzTlgEw3E6STDLn7hrasb6lhaWvWKgZmUnis5PTK2BYtTwxms';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding =
+    '='.repeat((4 - base64String.length % 4) % 4);
+
+  const base64 =
+    (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+  const rawData = atob(base64);
+
+  return Uint8Array.from(
+    [...rawData].map(c => c.charCodeAt(0))
+  );
+}
+ 
+ $('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient();msg('Accesso…','info','authMsg');const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)msg(error.message,'error','authMsg');else msg('','info','authMsg')});
 $('showRegister').onclick=async()=>{initClient();const email=prompt('Email del socio');if(!email)return;const password=prompt('Password (almeno 8 caratteri)');if(!password)return;const nome=prompt('Nome');const cognome=prompt('Cognome');const {error}=await sb.auth.signUp({email,password,options:{data:{nome,cognome}}});msg(error?error.message:'Registrazione completata. Se richiesto, confermare l’email prima di accedere.',''+(error?'error':'success'),'authMsg')};
 $('logout').onclick=()=>sb.auth.signOut();
 $('serviceForm').addEventListener('submit',saveService);$('editServiceForm').addEventListener('submit',saveEditedService);$('memberForm').addEventListener('submit',saveMember);$('sDate').value=todayISO();$('monthPicker').value=todayISO().slice(0,7);$('yearPicker').value=new Date().getFullYear();boot();
