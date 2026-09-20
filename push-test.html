@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ANC Mira - Test Push</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body style="font-family:Arial;padding:25px;max-width:650px;margin:auto">
+
+<h2>🔔 ANC Mira - Test notifiche Push</h2>
+
+<p>
+Questa pagina serve esclusivamente per registrare
+questo dispositivo alle notifiche.
+</p>
+
+<div id="status" style="padding:12px;background:#eee;margin:15px 0">
+Pronto.
+</div>
+
+<button onclick="attivaPush()"
+        style="padding:14px 20px;font-size:17px">
+🔔 ATTIVA NOTIFICHE
+</button>
+
+<script>
+
+const SUPABASE_URL =
+  'https://gpyifykpipwjaxujvsxl.supabase.co';
+
+/*
+ Inserisci qui la stessa PUBLISHABLE KEY
+ utilizzata nel tuo index.html.
+*/
+const SUPABASE_KEY = 'sb_publishable_D-OA3HyrmO7bV0THpnP7eg_WeSP2a3B';
+
+const VAPID_PUBLIC_KEY =
+  'BOIFV1fE7qCCFLjWQi-KXepX89FRopFd_EGsCsMzTlgEw3E6STDLn7hrasb6lhaWvWKgZmUnis5PTK2BYtTwxms';
+
+const sb = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+function stato(testo) {
+  document.getElementById('status').innerText = testo;
+}
+
+function urlBase64ToUint8Array(base64String) {
+
+  const padding =
+    '='.repeat((4 - base64String.length % 4) % 4);
+
+  const base64 =
+    (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+  const rawData = atob(base64);
+
+  return Uint8Array.from(
+    [...rawData].map(c => c.charCodeAt(0))
+  );
+}
+
+async function attivaPush() {
+
+  try {
+
+    stato('Controllo accesso ANC...');
+
+    const {
+      data: { user }
+    } = await sb.auth.getUser();
+
+    if (!user) {
+
+      stato(
+        '❌ Non risulti autenticato. ' +
+        'Prima accedi normalmente ad ANC Mira Servizi ' +
+        'e poi torna su questa pagina.'
+      );
+
+      return;
+    }
+
+    stato('Richiesta autorizzazione notifiche...');
+
+    const permission =
+      await Notification.requestPermission();
+
+    if (permission !== 'granted') {
+
+      stato('❌ Autorizzazione notifiche non concessa.');
+      return;
+    }
+
+    stato('Registrazione dispositivo...');
+
+    const registration =
+      await navigator.serviceWorker.register('./sw.js');
+
+    await navigator.serviceWorker.ready;
+
+    let subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+
+      subscription =
+        await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey:
+            urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+    }
+
+    const json = subscription.toJSON();
+
+    const { error } =
+      await sb
+        .from('push_subscriptions')
+        .upsert(
+          {
+            user_id: user.id,
+            endpoint: json.endpoint,
+            p256dh: json.keys.p256dh,
+            auth: json.keys.auth,
+            updated_at: new Date().toISOString()
+          },
+          {
+            onConflict: 'endpoint'
+          }
+        );
+
+    if (error)
+      throw error;
+
+    stato(
+      '✅ DISPOSITIVO REGISTRATO CORRETTAMENTE!'
+    );
+
+  } catch (e) {
+
+    console.error(e);
+
+    stato(
+      '❌ ERRORE: ' +
+      (e.message || e)
+    );
+  }
+}
+
+</script>
+
+</body>
+</html>
