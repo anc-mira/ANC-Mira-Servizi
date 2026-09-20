@@ -158,7 +158,50 @@ async function attivaPush() {
     );
   }
 }
+async function inviaTestPush() {
 
+  try {
+
+    stato('📨 Invio notifica di prova...');
+
+    const {
+      data: { session }
+    } = await sb.auth.getSession();
+
+    if (!session) {
+      stato('❌ Devi prima accedere ad ANC Mira Servizi.');
+      return;
+    }
+
+    const { data, error } =
+      await sb.functions.invoke('send-new-service-push', {
+        body: {
+          test: true
+        }
+      });
+
+    if (error) {
+      console.error(error);
+      stato('❌ ERRORE INVIO: ' + error.message);
+      return;
+    }
+
+    console.log('Risposta funzione:', data);
+
+    stato(
+      '✅ Richiesta inviata. Controlla la notifica sul dispositivo.'
+    );
+
+  } catch (e) {
+
+    console.error(e);
+
+    stato(
+      '❌ ERRORE: ' +
+      (e.message || e)
+    );
+  }
+}
 </script>
 
 </body>
