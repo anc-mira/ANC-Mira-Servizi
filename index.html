@@ -492,7 +492,42 @@ async function enablePushNotifications() {
   }
 }
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();initClient();msg('Accesso…','info','authMsg');const {error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)msg(error.message,'error','authMsg');else msg('','info','authMsg')});
-$('showRegister').onclick=async()=>{initClient();const email=prompt('Email del socio');if(!email)return;const password=prompt('Password (almeno 8 caratteri)');if(!password)return;const nome=prompt('Nome');const cognome=prompt('Cognome');const {error}=await sb.auth.signUp({email,password,options:{data:{nome,cognome}}});msg(error?error.message:'Registrazione completata. Se richiesto, confermare l’email prima di accedere.',''+(error?'error':'success'),'authMsg')};
+$('showRegister').onclick=async()=>{
+  initClient();
+  const email=(prompt('Email del socio')||'').trim();
+  if(!email)return;
+
+  msg('Verifica autorizzazione…','info','authMsg');
+  const {data:autorizzata,error:checkError}=await sb.rpc('email_socio_autorizzata',{p_email:email});
+
+  if(checkError){
+    console.error('Errore verifica email autorizzata:',checkError);
+    return msg('Errore durante la verifica dell’autorizzazione. Riprova o contatta l’amministratore ANC Mira.','error','authMsg');
+  }
+
+  if(autorizzata!==true){
+    return msg('⛔ Email non autorizzata. Rivolgiti all’amministratore ANC Mira.','error','authMsg');
+  }
+
+  const password=prompt('Password (almeno 8 caratteri)');
+  if(!password)return;
+  const nome=prompt('Nome');
+  if(nome===null)return;
+  const cognome=prompt('Cognome');
+  if(cognome===null)return;
+
+  const {error}=await sb.auth.signUp({
+    email,
+    password,
+    options:{data:{nome:nome.trim(),cognome:cognome.trim()}}
+  });
+
+  msg(
+    error?error.message:'Registrazione completata. Se richiesto, confermare l’email prima di accedere.',
+    error?'error':'success',
+    'authMsg'
+  );
+};
 $('logout').onclick=()=>sb.auth.signOut();
 $('serviceForm').addEventListener('submit',saveService);$('editServiceForm').addEventListener('submit',saveEditedService);$('memberForm').addEventListener('submit',saveMember);$('sDate').value=todayISO();$('monthPicker').value=todayISO().slice(0,7);$('yearPicker').value=new Date().getFullYear();boot();
 
