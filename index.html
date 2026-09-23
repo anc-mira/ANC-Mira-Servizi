@@ -157,7 +157,84 @@ async function loadMembers(){const [v,s]=await Promise.all([sb.from('v_ore_socio
 function openNewMember(){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');$('mId').value='';$('mName').value='';$('mSurname').value='';$('mEmail').value='';$('mActive').value='true';$('memberModalTitle').textContent='Nuovo socio';$('memberModal').classList.remove('hidden')}
 async function openMember(id){const {data,error}=await sb.from('soci').select('*').eq('id',id).single();if(error)return msg(error.message,'error');$('mId').value=data.id;$('mName').value=data.nome||'';$('mSurname').value=data.cognome||'';$('mEmail').value=data.email||'';$('mActive').value=String(data.attivo!==false);$('memberModalTitle').textContent='Modifica socio';$('memberModal').classList.remove('hidden')}
 function closeMember(){$('memberModal').classList.add('hidden')}
-async function saveMember(e){e.preventDefault();if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');const id=$('mId').value;const payload={nome:$('mName').value.trim(),cognome:$('mSurname').value.trim(),email:$('mEmail').value.trim().toLowerCase()||null,attivo:$('mActive').value==='true'};const r=id?await sb.from('soci').update(payload).eq('id',id):await sb.from('soci').insert(payload);if(r.error)return msg('Errore salvataggio socio: '+r.error.message,'error');closeMember();msg(id?'Socio modificato e sincronizzato online.':'Socio aggiunto e sincronizzato online.','success');await loadMembers();await loadTypesAndMembers();await loadWeek()}
+async function saveMember(e){
+ e.preventDefault();
+ if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');
+
+ const id=$('mId').value;
+ const nuovaEmail=$('mEmail').value.trim().toLowerCase()||null;
+ const payload={
+   nome:$('mName').value.trim(),
+   cognome:$('mSurname').value.trim(),
+   email:nuovaEmail,
+   attivo:$('mActive').value==='true'
+ };
+
+ if(!id){
+   const r=await sb.from('soci').insert(payload);
+   if(r.error)return msg('Errore salvataggio socio: '+r.error.message,'error');
+   closeMember();
+   msg('Socio aggiunto e sincronizzato online.','success');
+   await loadMembers();await loadTypesAndMembers();await loadWeek();
+   return;
+ }
+
+ // Rileggiamo il socio dal database per sapere se possiede già un account Authentication.
+ const {data:originale,error:readError}=await sb.from('soci')
+   .select('id,profile_id,email')
+   .eq('id',id)
+   .single();
+ if(readError)return msg('Errore lettura socio: '+readError.message,'error');
+
+ const vecchiaEmail=String(originale?.email||'').trim().toLowerCase()||null;
+ const emailCambiata=vecchiaEmail!==nuovaEmail;
+
+ // Se il socio è già registrato, l'email deve essere cambiata anche in Authentication.
+ if(emailCambiata && originale?.profile_id){
+   if(currentProfile?.ruolo!=='admin'){
+     return msg("Per un socio già registrato il cambio email può essere eseguito solo da un amministratore.",'error');
+   }
+   if(!nuovaEmail){
+     return msg("Per un socio già registrato l'email non può essere lasciata vuota.",'error');
+   }
+
+   const {data:edgeData,error:edgeError}=await sb.functions.invoke('cambia-email-socio',{
+     body:{socio_id:id,nuova_email:nuovaEmail}
+   });
+
+   if(edgeError){
+     let dettaglio=edgeError.message||'Errore sconosciuto';
+     try{
+       if(edgeError.context){
+         const body=await edgeError.context.json();
+         if(body?.error)dettaglio=body.error;
+       }
+     }catch(_){}
+     return msg('Cambio email non riuscito: '+dettaglio,'error');
+   }
+   if(edgeData?.error)return msg('Cambio email non riuscito: '+edgeData.error,'error');
+
+   // L'Edge Function ha già sincronizzato Authentication, profiles e soci.
+   // Qui aggiorniamo soltanto gli altri dati anagrafici.
+   const altriDati={nome:payload.nome,cognome:payload.cognome,attivo:payload.attivo};
+   const r=await sb.from('soci').update(altriDati).eq('id',id);
+   if(r.error)return msg('Email aggiornata, ma errore negli altri dati del socio: '+r.error.message,'error');
+ }else{
+   // Nessun cambio email, oppure socio non ancora registrato.
+   const r=await sb.from('soci').update(payload).eq('id',id);
+   if(r.error)return msg('Errore salvataggio socio: '+r.error.message,'error');
+ }
+
+ closeMember();
+ msg(emailCambiata&&originale?.profile_id?'Socio modificato. Email sincronizzata con Authentication, profilo e anagrafica.':'Socio modificato e sincronizzato online.','success');
+ await loadMembers();await loadTypesAndMembers();await loadWeek();
+
+ // Se l'amministratore ha modificato la propria scheda, riallineiamo anche i dati in memoria.
+ if(currentSocio?.id===id){
+   const {data:me}=await sb.from('soci').select('*').eq('id',id).maybeSingle();
+   if(me){currentSocio=me;$('userName').textContent=fullName(me);}
+ }
+}
 
 function socioStateLabel(st){return st==='presente'||st==='confermato'?'🟢 Presente':st==='non_disponibile'?'🔴 Non presente':'⚪ Nessuna scelta'}
 async function loadMyServices(){if(!currentSocio){$('myServicesTable').innerHTML='<div class="error">Il tuo account non è ancora collegato a una scheda socio. Contatta un amministratore.</div>';return}const {data,error}=await sb.from('assegnazioni_servizio').select('id,servizio_id,socio_id,stato,servizi(id,titolo,data,ora_inizio,ora_fine,luogo,stato)').eq('socio_id',currentSocio.id);if(error){$('myServicesTable').innerHTML=`<div class="error">${esc(error.message)}</div>`;return}const a=(data||[]).sort((x,y)=>String(x.servizi?.data||'').localeCompare(String(y.servizi?.data||''))||String(x.servizi?.ora_inizio||'').localeCompare(String(y.servizi?.ora_inizio||'')));$('myServicesTable').innerHTML=a.length?'<table><tr><th>Data</th><th>Servizio</th><th>Luogo</th><th>Partecipazione</th></tr>'+a.map(x=>{const v=x.servizi||{},st=x.stato||'in_attesa',completed=v.stato==='completato',cancelled=v.stato==='annullato',closed=completed||cancelled;return `<tr><td>${v.data?fmtDate(v.data):'—'}<br>${fmtTime(v.ora_inizio)}–${fmtTime(v.ora_fine)}</td><td><b>${esc(v.titolo||'')}</b>${completed?'<br><span class="badge ok">✅ Servizio confermato</span>':cancelled?'<br><span class="badge bad">🔴 SERVIZIO ANNULLATO</span>':''}</td><td>${esc(v.luogo||'')}</td><td><select onchange="saveMyAvailability('${x.id}','${x.servizio_id}',this.value,this)" style="min-width:190px" ${closed?'disabled':''}><option value="in_attesa" ${st==='in_attesa'?'selected':''}>⚪ Nessuna scelta</option><option value="presente" ${st==='presente'||st==='confermato'?'selected':''}>🟢 Presente</option><option value="non_disponibile" ${st==='non_disponibile'?'selected':''}>🔴 Non presente</option></select><div class="small muted">${cancelled?'Servizio annullato: dichiarazione non modificabile.':completed?'Servizio chiuso: dichiarazione non modificabile.':socioStateLabel(st)}</div></td></tr>`}).join('')+'</table>':'<p class="muted">Nessun servizio disponibile.</p>'}
