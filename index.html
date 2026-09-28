@@ -48,7 +48,10 @@ form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1
 <div id="assignModal" class="modal hidden"><div class="modalbox"><h2>Gestione soci servizio</h2><div id="assignSummary" class="info">Caricamento…</div><div id="assignMembers"></div><div class="full actions"><button id="saveAssignmentsBtn" type="button" onclick="saveAssignments()">SALVA ASSEGNAZIONI</button><button type="button" class="alt" onclick="closeAssign()">ANNULLA</button></div></div></div>
 <div id="memberModal" class="modal hidden"><div class="modalbox"><h2 id="memberModalTitle">Nuovo socio</h2><form id="memberForm"><input id="mId" type="hidden"><label>Nome<input id="mName" required></label><label>Cognome<input id="mSurname" required></label><label>Email<input id="mEmail" type="email" placeholder="email del socio"></label><label>Stato<select id="mActive"><option value="true">Attivo</option><option value="false">Non attivo</option></select></label><div class="full actions"><button type="submit">SALVA SOCIO</button><button type="button" class="alt" onclick="closeMember()">ANNULLA</button></div></form></div></div>
 <div id="editModal" class="modal hidden"><div class="modalbox"><h2>Modifica servizio</h2><form id="editServiceForm"><input id="eId" type="hidden"><label>Titolo<input id="eTitle" required></label><label>Data<input id="eDate" type="date" required></label><label>Ora inizio<input id="eStart" type="time" required></label><label>Ora fine<input id="eEnd" type="time" required></label><label>Tipo<select id="eType"></select></label><label>Responsabile<select id="eManager"></select></label><label>Soci richiesti<input id="eRequired" type="number" min="1" required></label><label class="full">Luogo<input id="ePlace"></label><label class="full">Soci assegnati<select id="eMembers" multiple size="6"></select></label><label class="full">Descrizione / note<textarea id="eNotes"></textarea></label><div class="full actions"><button type="submit">SALVA MODIFICHE</button><button type="button" class="alt" onclick="closeEdit()">ANNULLA</button><button type="button" class="danger" onclick="deleteFromEdit()">🔴 ANNULLA SERVIZIO</button></div></form></div></div>
-<section id="new" class="hidden"><div class="panel"><h2>Nuovo servizio</h2><form id="serviceForm"><label>Titolo<input id="sTitle" required placeholder="es. Assistenza manifestazione"></label><label>Data<input id="sDate" type="date" required></label><label>Ora inizio<input id="sStart" type="time" required></label><label>Ora fine<input id="sEnd" type="time" required></label><label>Tipo<select id="sType"></select></label><label>Responsabile<select id="sManager"></select></label><label>Soci richiesti<input id="sRequired" type="number" min="1" value="2" required></label><label class="full">Luogo<input id="sPlace" placeholder="Inserire luogo"></label><div class="full info">Il nuovo servizio verrà assegnato automaticamente a tutti i soci attivi, che potranno indicare Presente o Non presente.</div><select id="sMembers" class="hidden" multiple></select><label class="full">Descrizione / note<textarea id="sNotes"></textarea></label><div class="full"><button type="submit">SALVA ONLINE</button></div></form></div></section>
+<section id="new" class="hidden"><div class="panel"><h2>Nuovo servizio</h2><form id="serviceForm"><label>Titolo<input id="sTitle" required placeholder="es. Assistenza manifestazione"></label><label>Data<input id="sDate" type="date" required></label><label>Ora inizio<input id="sStart" type="time" required></label><label>Ora fine<input id="sEnd" type="time" required></label><label>Tipo<select id="sType"></select></label><label>Responsabile<select id="sManager"></select></label><label>Soci richiesti<input id="sRequired" type="number" min="1" value="2" required></label><label class="full">Luogo<input id="sPlace" placeholder="Inserire luogo"></label><div class="full info">Il nuovo servizio verrà assegnato automaticamente a tutti i soci attivi, che potranno indicare Presente o Non presente.</div><select id="sMembers" class="hidden" multiple></select><label class="full">Descrizione / note<textarea id="sNotes"></textarea></label><div class="full"><button type="submit">SALVA ONLINE</button></div></form>
+<div class="info" style="margin-top:18px"><b>🔁 Servizi ricorrenti</b><br><span class="small">Genera automaticamente: martedì “Mercato e parchi Oriago” 10:00–12:00 e giovedì “Mercato e parchi Mira” 10:00–12:00. I servizi già esistenti con stesso titolo e data non vengono duplicati.</span>
+<div class="actions"><label style="max-width:180px">Settimane da generare<input id="recurringWeeks" type="number" min="1" max="12" value="4"></label><button type="button" onclick="generateRecurringServices()">🔁 GENERA SERVIZI RICORRENTI</button></div></div>
+</div></section>
 <section id="members" class="hidden"><div class="panel"><h2>Soci</h2><div class="actions"><button id="addMemberBtn" onclick="openNewMember()">➕ AGGIUNGI SOCIO</button><button onclick="loadMembers()">↻ Aggiorna</button></div><div id="membersTable">Caricamento…</div></div></section>
 <section id="myservices" class="hidden"><div class="panel"><h2>I miei servizi</h2><p class="muted">Per ogni servizio indica la tua partecipazione: Presente o Non presente.</p><div id="myServicesTable">Caricamento…</div></div></section>
 <section id="attendance" class="hidden"><div class="panel"><h2>Presenze e ore</h2><div id="attendanceTable">Caricamento…</div></div></section>
@@ -155,7 +158,7 @@ async function monthlyPdfReport(){
 }
 async function loadYear(){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return;const y=Number($('yearPicker').value)||new Date().getFullYear();$('yearPicker').value=y;const from=`${y}-01-01`,to=`${y}-12-31`;const {data,error}=await sb.from('servizi').select('id,data,stato,assegnazioni_servizio(stato),presenze(stato,ore_totali)').gte('data',from).lte('data',to).order('data');if(error){$('yearTable').innerHTML=`<div class="error">${esc(error.message)}</div>`;return}const rows=data||[];const activeRows=rows.filter(s=>s.stato!=='annullato');const cancelledRows=rows.filter(s=>s.stato==='annullato');const months=Array.from({length:12},(_,i)=>({n:i+1,servizi:0,disp:0,nondisp:0,presenti:0,ore:0}));activeRows.forEach(s=>{const z=months[Number(s.data.slice(5,7))-1];z.servizi++;(s.assegnazioni_servizio||[]).forEach(a=>{if(a.stato==='confermato')z.disp++;if(a.stato==='non_disponibile')z.nondisp++});(s.presenze||[]).forEach(p=>{if(p.stato==='presente'){z.presenti++;z.ore+=Number(p.ore_totali||0)}})});const totalHours=months.reduce((n,x)=>n+x.ore,0);$('yearSummary').innerHTML=`<div class="card">Servizi anno<div class="num">${activeRows.length}</div></div><div class="card">Annullati<div class="num">${cancelledRows.length}</div></div><div class="card">Ore registrate<div class="num">${totalHours.toFixed(2)}</div></div>`;const names=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];$('yearTable').innerHTML='<table><tr><th>Mese</th><th>Servizi</th><th>Partecipazione</th><th>Non disponibili</th><th>Presenze</th><th>Ore</th></tr>'+months.map((z,i)=>`<tr style="cursor:pointer" onclick="openMonthFromYear(${y},${z.n})"><td><b>${names[i]}</b></td><td>${z.servizi}</td><td>${z.disp}</td><td>${z.nondisp}</td><td>${z.presenti}</td><td>${z.ore.toFixed(2)}</td></tr>`).join('')+'</table>'}
 function openMonthFromYear(y,m){$('monthPicker').value=`${y}-${String(m).padStart(2,'0')}`;show('month')}
-async function loadTypesAndMembers(){if(!sb)return;const [t,m]=await Promise.all([sb.from('tipi_servizio').select('*').eq('attivo',true).order('nome'),sb.from('soci').select('*').eq('attivo',true).order('cognome').order('nome')]);if(t.error||m.error)return; $('sType').innerHTML=(t.data||[]).map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('');$('sManager').innerHTML='<option value="">Nessuno</option>'+(m.data||[]).map(x=>`<option value="${x.id}">${esc(fullName(x))}</option>`).join('');$('sMembers').innerHTML=(m.data||[]).map(x=>`<option value="${x.id}">${esc(fullName(x))}</option>`).join('')}
+async function loadTypesAndMembers(){if(!sb)return;const [t,m]=await Promise.all([sb.from('tipi_servizio').select('*').eq('attivo',true).order('nome'),sb.from('soci').select('*').eq('attivo',true).order('cognome').order('nome')]);if(t.error||m.error)return; $('sType').innerHTML=(t.data||[]).map(x=>`<option value="${x.id}">${esc(x.nome==='Vigilanza'?'Osservazione e controllo':x.nome)}</option>`).join('');$('sManager').innerHTML='<option value="">Nessuno</option>'+(m.data||[]).map(x=>`<option value="${x.id}">${esc(fullName(x))}</option>`).join('');$('sMembers').innerHTML=(m.data||[]).map(x=>`<option value="${x.id}">${esc(fullName(x))}</option>`).join('')}
 async function loadMembers(){const [v,s]=await Promise.all([sb.from('v_ore_socio').select('*').order('cognome'),sb.from('soci').select('*').order('cognome').order('nome')]);if(s.error){$('membersTable').innerHTML=`<div class="error">${esc(s.error.message)}</div>`;return}const stats=new Map((v.data||[]).map(x=>[x.id||x.socio_id,x]));const rows=s.data||[];$('membersTable').innerHTML=rows.length?'<table><tr><th>Socio</th><th>Stato</th><th>Servizi</th><th>Ore</th><th>Assenze</th><th>Azioni</th></tr>'+rows.map(x=>{const z=stats.get(x.id)||{};return `<tr><td>${esc(fullName(x))}</td><td><span class="badge ${x.attivo?'ok':'wait'}">${x.attivo?'Attivo':'Non attivo'}</span></td><td>${z.servizi_effettuati||0}</td><td>${Number(z.ore_totali||0).toFixed(2)}</td><td>${z.assenze||0}</td><td>${['admin','responsabile'].includes(currentProfile?.ruolo)?`<button onclick="openMember('${x.id}')">✏️ Modifica</button> <button class="danger" onclick="deleteMember('${x.id}')">🗑️ Elimina</button>`:''}</td></tr>`}).join('')+'</table>':'<p class="muted">Nessun socio presente. Usa <b>➕ AGGIUNGI SOCIO</b> per inserire il primo socio.</p>'}
 function openNewMember(){if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');$('mId').value='';$('mName').value='';$('mSurname').value='';$('mEmail').value='';$('mActive').value='true';$('memberModalTitle').textContent='Nuovo socio';$('memberModal').classList.remove('hidden')}
 async function openMember(id){const {data,error}=await sb.from('soci').select('*').eq('id',id).single();if(error)return msg(error.message,'error');$('mId').value=data.id;$('mName').value=data.nome||'';$('mSurname').value=data.cognome||'';$('mEmail').value=data.email||'';$('mActive').value=String(data.attivo!==false);$('memberModalTitle').textContent='Modifica socio';$('memberModal').classList.remove('hidden')}
@@ -304,6 +307,74 @@ async function annualPdfReport(){
 async function loadAttendance(){const {data,error}=await sb.from('v_ore_socio').select('*').order('cognome');if(error){$('attendanceTable').innerHTML=`<div class="error">${esc(error.message)}</div>`;return} $('attendanceTable').innerHTML='<table><tr><th>Socio</th><th>Servizi effettuati</th><th>Ore</th><th>Assenze</th></tr>'+(data||[]).map(x=>`<tr><td>${esc(fullName(x))}</td><td>${x.servizi_effettuati||0}</td><td>${Number(x.ore_totali||0).toFixed(2)}</td><td>${x.assenze||0}</td></tr>`).join('')+'</table>'}
 async function loadNotifications(){if(!sb||!currentUser)return;const {data,error}=await sb.from('notifiche').select('*').eq('utente_id',currentUser.id).order('created_at',{ascending:false}).limit(30);if(error){$('notificationsList').innerHTML=`<div class="error">${esc(error.message)}</div>`;return} $('notificationsList').innerHTML=(data||[]).map(n=>`<div class="panel" style="box-shadow:none;border:1px solid #eee"><b>${esc(n.titolo)}</b><div>${esc(n.messaggio)}</div><small class="muted">${new Date(n.created_at).toLocaleString('it-IT')}</small>${!n.letta?`<div class="actions"><button onclick="readNotification('${n.id}')">Segna letta</button></div>`:''}</div>`).join('')||'<p class="muted">Nessuna notifica.</p>'}
 async function readNotification(id){await sb.from('notifiche').update({letta:true}).eq('id',id).eq('utente_id',currentUser.id);loadNotifications()}
+
+function localISODate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function nextWeekdayDate(start,weekday){
+  const d=new Date(start); d.setHours(12,0,0,0);
+  let delta=(weekday-d.getDay()+7)%7;
+  d.setDate(d.getDate()+delta);
+  return d;
+}
+async function generateRecurringServices(){
+  if(!['admin','responsabile'].includes(currentProfile?.ruolo))return msg('Non autorizzato','error');
+  const weeks=Math.max(1,Math.min(12,Number($('recurringWeeks')?.value||4)));
+  const typeRes=await sb.from('tipi_servizio').select('id,nome').eq('attivo',true);
+  if(typeRes.error)return msg('Errore caricamento tipi servizio: '+typeRes.error.message,'error');
+  const vigilanza=(typeRes.data||[]).find(x=>String(x.nome||'').trim().toLowerCase()==='vigilanza');
+  if(!vigilanza)return msg('Tipo interno "Vigilanza" non trovato. Nessun servizio creato.','error');
+
+  const today=new Date(); today.setHours(12,0,0,0);
+  const templates=[
+    {weekday:2,title:'Mercato e parchi Oriago',place:'Oriago'},
+    {weekday:4,title:'Mercato e parchi Mira',place:'Mira'}
+  ];
+  const candidates=[];
+  for(const t of templates){
+    const first=nextWeekdayDate(today,t.weekday);
+    for(let i=0;i<weeks;i++){
+      const d=new Date(first); d.setDate(first.getDate()+i*7);
+      candidates.push({...t,date:localISODate(d)});
+    }
+  }
+  candidates.sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title,'it'));
+
+  if(!confirm(`Verranno controllati ${candidates.length} servizi ricorrenti nelle prossime ${weeks} settimane.\n\nMartedì: Mercato e parchi Oriago 10:00–12:00\nGiovedì: Mercato e parchi Mira 10:00–12:00\n\nI duplicati già presenti verranno saltati. Procedere?`))return;
+
+  const from=candidates[0].date,to=candidates[candidates.length-1].date;
+  const existingRes=await sb.from('servizi').select('id,titolo,data').gte('data',from).lte('data',to);
+  if(existingRes.error)return msg('Errore controllo servizi esistenti: '+existingRes.error.message,'error');
+  const existing=new Set((existingRes.data||[]).map(s=>`${s.data}|${String(s.titolo||'').trim().toLowerCase()}`));
+  const membersRes=await sb.from('soci').select('id').eq('attivo',true);
+  if(membersRes.error)return msg('Errore caricamento soci attivi: '+membersRes.error.message,'error');
+  const members=membersRes.data||[];
+
+  let created=0,skipped=0;
+  for(const c of candidates){
+    const key=`${c.date}|${c.title.toLowerCase()}`;
+    if(existing.has(key)){skipped++;continue}
+    const payload={
+      titolo:c.title,data:c.date,ora_inizio:'10:00',ora_fine:'12:00',
+      tipo_servizio_id:vigilanza.id,responsabile_id:null,soci_richiesti:2,
+      luogo:c.place,descrizione:'',created_by:currentUser.id
+    };
+    const ins=await sb.from('servizi').insert(payload).select().single();
+    if(ins.error)return msg(`Creati ${created} servizi. Errore su ${c.date}: ${ins.error.message}`,'error');
+    const rows=members.map(x=>({servizio_id:ins.data.id,socio_id:x.id,stato:'in_attesa'}));
+    if(rows.length){
+      const ar=await sb.from('assegnazioni_servizio').insert(rows);
+      if(ar.error)return msg(`Servizio ${c.title} del ${c.date} creato, ma errore assegnazioni: ${ar.error.message}`,'error');
+    }
+    try{
+      const {error:pushError}=await sb.functions.invoke('send-new-service-push',{body:{servizio_id:ins.data.id}});
+      if(pushError)console.error('Errore push servizio ricorrente:',pushError);
+    }catch(pushError){console.error('Errore push servizio ricorrente:',pushError)}
+    existing.add(key); created++;
+  }
+  msg(`Servizi ricorrenti: ${created} creati, ${skipped} già esistenti e quindi saltati.`,'success');
+  weekOffset=0;
+  await loadWeek(); await loadDashboard();
+}
+
 async function saveService(e){e.preventDefault();if(!['admin','responsabile'].includes(currentProfile.ruolo))return msg('Non autorizzato','error');const payload={titolo:$('sTitle').value,data:$('sDate').value,ora_inizio:$('sStart').value,ora_fine:$('sEnd').value,tipo_servizio_id:$('sType').value||null,responsabile_id:$('sManager').value||null,soci_richiesti:Number($('sRequired').value),luogo:$('sPlace').value,descrizione:$('sNotes').value,created_by:currentUser.id};const {data,error}=await sb.from('servizi').insert(payload).select().single();if(error)return msg(error.message,'error');const m=await sb.from('soci').select('id').eq('attivo',true);if(m.error)return msg('Servizio creato, ma errore nel caricamento soci: '+m.error.message,'error');const rows=(m.data||[]).map(x=>({servizio_id:data.id,socio_id:x.id,stato:'in_attesa'}));if(rows.length){const r=await sb.from('assegnazioni_servizio').insert(rows);if(r.error)return msg('Servizio creato, ma errore nelle assegnazioni automatiche: '+r.error.message,'error')}try {
   const { error: pushError } =
     await sb.functions.invoke('send-new-service-push', {
